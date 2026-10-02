@@ -3,7 +3,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useCommunitySos } from '../services/CommunitySosContext';
 
 export default function CommunitySosAlert() {
-  const { user } = useAuth();
+  const { user, isResponder } = useAuth();
   const {
     viewerLocation,
     locationPermissionState,
@@ -22,7 +22,7 @@ export default function CommunitySosAlert() {
           <p className="eyebrow">Community response</p>
           <h2>SOS alerts nearby</h2>
         </div>
-        {!viewerLocation ? (
+        {isResponder && !viewerLocation ? (
           <button
             className="filter-button is-active"
             type="button"
@@ -34,7 +34,14 @@ export default function CommunitySosAlert() {
         ) : null}
       </div>
 
-      {!user ? <div className="empty-state">Please sign in to receive nearby SOS alerts.</div> : null}
+      {!isResponder ? (
+        <div className="empty-state">
+          <p>Resident identities and precise SOS locations are only available to authorized responders.</p>
+          <Link className="filter-button is-active" to="/my-safety-status">Open SAFE / SOS response</Link>
+        </div>
+      ) : null}
+      {isResponder && !user ? <div className="empty-state">Please sign in to receive nearby SOS alerts.</div> : null}
+      {isResponder ? <>
       {locationError ? <div className="error-box">{locationError}</div> : null}
       {rpcError ? <div className="error-box">Unable to load nearby SOS alerts.</div> : null}
       {subscriptionError ? <div className="error-box">Community SOS realtime unavailable. Please try again later.</div> : null}
@@ -61,6 +68,7 @@ export default function CommunitySosAlert() {
           Realtime: {subscriptionStatus} | Radius: configured | Nearby records: {nearbySos.length}
         </div>
       ) : null}
+      </> : null}
     </section>
   );
 }

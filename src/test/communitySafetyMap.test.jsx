@@ -96,15 +96,17 @@ describe('CommunitySafetyMapPage', () => {
     );
   });
 
-  it('displays the actual coordinates returned by the browser', () => {
+  it('shows coordinates as secondary details and allows a readable place label', () => {
     const getCurrentPosition = vi.fn((success) => success({ coords: { latitude: 10.1234, longitude: 124.5678 } }));
     mockGeolocation({ getCurrentPosition });
     render(<CommunitySafetyMapPage />);
 
     fireEvent.click(screen.getByRole('button', { name: /use my current location/i }));
 
-    expect(screen.getByText(/Current location: 10\.1234, 124\.5678/i)).toBeInTheDocument();
+    expect(screen.getByText(/Coordinates: 10\.1234, 124\.5678/i)).toBeInTheDocument();
     expect(screen.getByText('You are here')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Place name or landmark/i), { target: { value: 'Purok 1, Barangay San Roque' } });
+    expect(screen.getByText('Purok 1, Barangay San Roque')).toBeInTheDocument();
   });
 
   it.each([

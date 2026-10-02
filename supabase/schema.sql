@@ -20,6 +20,8 @@ create table if not exists public.sensors (
   latitude double precision,
   longitude double precision,
   status text not null default 'UNKNOWN' check (status in ('ONLINE','OFFLINE','STALE','UNKNOWN')),
+  location text,
+  barangay text,
   last_heartbeat timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -41,9 +43,15 @@ create table if not exists public.alerts (
   title text not null,
   message text not null,
   severity text not null check (severity in ('INFORMATION','WATCH','WARNING','CRITICAL')),
+  location text,
+  status text not null default 'ACTIVE' check (status in ('ACTIVE','ACKNOWLEDGED','RESOLVED')),
   created_at timestamptz not null default now(),
   expires_at timestamptz,
   created_by uuid references auth.users(id),
+  acknowledged_at timestamptz,
+  acknowledged_by uuid references auth.users(id),
+  resolved_at timestamptz,
+  resolved_by uuid references auth.users(id),
   is_active boolean not null default true
 );
 
@@ -54,7 +62,10 @@ create table if not exists public.announcements (
   created_by uuid references auth.users(id),
   is_active boolean not null default true,
   created_at timestamptz not null default now(),
-  expires_at timestamptz
+  expires_at timestamptz,
+  category text,
+  affected_location text,
+  issuing_office text
 );
 
 create table if not exists public.resident_safety_status (
@@ -77,6 +88,8 @@ create table if not exists public.sos_requests (
   location_shared boolean not null default false,
   location text,
   notes text,
+  handled_by uuid references auth.users(id),
+  resolved_by uuid references auth.users(id),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   resolved_at timestamptz,
@@ -92,6 +105,10 @@ create table if not exists public.evacuation_centers (
   capacity integer,
   status text not null default 'OPEN' check (status in ('OPEN','FULL','CLOSED')),
   contact_information text,
+  barangay text,
+  status_verified boolean not null default false,
+  status_verified_at timestamptz,
+  status_verified_by uuid references auth.users(id),
   created_at timestamptz not null default now()
 );
 
@@ -117,6 +134,9 @@ create table if not exists public.emergency_contacts (
   phone text,
   email text,
   notes text,
+  category text,
+  is_verified boolean not null default false,
+  verified_at timestamptz,
   created_at timestamptz not null default now(),
   created_by uuid references auth.users(id)
 );
@@ -148,8 +168,8 @@ for select using (true);
 create policy "Residents can view public sensor metadata" on public.sensors
 for select using (true);
 
-create policy "Residents can view active alerts" on public.alerts
-for select using (is_active = true);
+create policy "Residents can view alert history" on public.alerts
+for select using (true);
 
 create policy "Residents can view active announcements" on public.announcements
 for select using (is_active = true);
@@ -296,6 +316,23 @@ create trigger profiles_set_updated_at
 before update on public.profiles
 for each row execute function public.set_updated_at();
 
+create or replace function public.prevent_profile_role_change()
+returns trigger as $$
+begin
+  if auth.uid() is not null and new.role is distinct from old.role then
+    if auth.uid() <> old.id then
+      return new;
+    end if;
+    raise exception 'Profile roles can only be changed by an administrator';
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+create trigger profiles_prevent_role_change
+before update of role on public.profiles
+for each row execute function public.prevent_profile_role_change();
+
 create trigger sensors_set_updated_at
 before update on public.sensors
 for each row execute function public.set_updated_at();
@@ -313,7 +350,7 @@ create or replace function public.handle_new_user()
 returns trigger as $$
 begin
   insert into public.profiles (id, email, full_name, role)
-  values (new.id, new.email, new.raw_user_meta_data->>'full_name', coalesce(new.raw_user_meta_data->>'role', 'resident'))
+  values (new.id, new.email, new.raw_user_meta_data->>'full_name', 'resident')
   on conflict (id) do nothing;
   return new;
 end;

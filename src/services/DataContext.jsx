@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { supabase, isSupabaseConfigured } from './supabaseClient';
+import { createDemoData } from './demoData';
 
 const DataContext = createContext({
   latestReading: null,
@@ -12,6 +13,8 @@ const DataContext = createContext({
   sosRequests: [],
   loading: true,
   error: null,
+  demoMode: false,
+  now: Date.now(),
   refresh: async () => {},
 });
 
@@ -26,6 +29,26 @@ export function DataProvider({ children }) {
   const [sosRequests, setSosRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [demoMode, setDemoMode] = useState(false);
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 30000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const applyDemoData = (preserveConfiguredData = false, configured = {}) => {
+    const demo = createDemoData();
+    setReadings(demo.readings);
+    setLatestReading(demo.readings.at(-1) || null);
+    setSensors(preserveConfiguredData && configured.sensors?.length ? configured.sensors : demo.sensors);
+    setAlerts(preserveConfiguredData && configured.alerts?.length ? configured.alerts : demo.alerts);
+    setAnnouncements(preserveConfiguredData && configured.announcements?.length ? configured.announcements : demo.announcements);
+    setEvacuationCenters(configured.evacuationCenters || []);
+    setEmergencyContacts(configured.emergencyContacts || []);
+    setSosRequests(configured.sosRequests || []);
+    setDemoMode(true);
+  };
 
   const safeFetchOptionalTable = async (tableName, queryBuilder) => {
     try {
@@ -52,6 +75,7 @@ export function DataProvider({ children }) {
 
   const fetchData = async () => {
     if (!isSupabaseConfigured || !supabase) {
+      applyDemoData();
       setLoading(false);
       setError('Supabase is not configured. Add your VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY values.');
       return;
@@ -62,9 +86,9 @@ export function DataProvider({ children }) {
       setError(null);
 
       const [readingsResult, sensorsResult, alertsResult, announcementsResult, centersResult, sosResult, contactsResult] = await Promise.all([
-        supabase.from('river_readings').select('*').order('recorded_at', { ascending: false }).limit(24),
+        supabase.from('river_readings').select('*').order('recorded_at', { ascending: false }).limit(1000),
         supabase.from('sensors').select('*').order('updated_at', { ascending: false }),
-        supabase.from('alerts').select('*').eq('is_active', true).order('created_at', { ascending: false }).limit(10),
+        supabase.from('alerts').select('*').order('created_at', { ascending: false }).limit(100),
         supabase.from('announcements').select('*').eq('is_active', true).order('created_at', { ascending: false }).limit(10),
         safeFetchOptionalTable('evacuation_centers', (client) => client.from('evacuation_centers').select('*').order('name', { ascending: true })),
         supabase.from('sos_requests').select('*').order('created_at', { ascending: false }).limit(20),
@@ -80,15 +104,37 @@ export function DataProvider({ children }) {
       if (contactsResult.error) throw contactsResult.error;
 
       const orderedReadings = [...(readingsResult.data || [])].sort((a, b) => new Date(a.recorded_at) - new Date(b.recorded_at));
-      setReadings(orderedReadings);
-      setLatestReading(orderedReadings.at(-1) || null);
-      setSensors(sensorsResult.data || []);
-      setAlerts(alertsResult.data || []);
-      setAnnouncements(announcementsResult.data || []);
-      setEvacuationCenters(centersResult.data || []);
-      setSosRequests(sosResult.data || []);
-      setEmergencyContacts(contactsResult.data || []);
+      const latestValidReading = orderedReadings.filter((reading) => (
+        reading.water_level !== null
+        && reading.water_level !== undefined
+        && reading.water_level !== ''
+        && Number.isFinite(Number(reading.water_level))
+        && Number.isFinite(new Date(reading.recorded_at).getTime())
+      )).at(-1) || null;
+      const configured = {
+        sensors: sensorsResult.data || [],
+        alerts: alertsResult.data || [],
+        announcements: announcementsResult.data || [],
+        evacuationCenters: centersResult.data || [],
+        sosRequests: sosResult.data || [],
+        emergencyContacts: contactsResult.data || [],
+      };
+
+      if (!latestValidReading) {
+        applyDemoData(true, configured);
+      } else {
+        setReadings(orderedReadings);
+        setLatestReading(latestValidReading);
+        setSensors(configured.sensors);
+        setAlerts(configured.alerts);
+        setAnnouncements(configured.announcements);
+        setEvacuationCenters(configured.evacuationCenters);
+        setSosRequests(configured.sosRequests);
+        setEmergencyContacts(configured.emergencyContacts);
+        setDemoMode(false);
+      }
     } catch (fetchError) {
+      applyDemoData();
       setError(fetchError.message || 'Unable to load data.');
     } finally {
       setLoading(false);
@@ -126,9 +172,11 @@ export function DataProvider({ children }) {
       sosRequests,
       loading,
       error,
+      demoMode,
+      now,
       refresh: fetchData,
     }),
-    [latestReading, readings, sensors, alerts, announcements, evacuationCenters, emergencyContacts, sosRequests, loading, error],
+    [latestReading, readings, sensors, alerts, announcements, evacuationCenters, emergencyContacts, sosRequests, loading, error, demoMode, now],
   );
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

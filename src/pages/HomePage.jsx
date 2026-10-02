@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useData } from '../services/DataContext';
 import { appConfig, getRiskLevel, getSensorStatus } from '../config/appConfig';
+import { getCurrentRateOfRise, getEstimatedTimeToThreshold } from '../config/riverMetrics';
 import StatusBadge from '../components/StatusBadge';
 import RiverChart from '../components/RiverChart';
 import CommunitySosAlert from '../components/CommunitySosAlert';
@@ -44,104 +46,7 @@ export function isRiverReadingStaleOrUnavailable(reading, sensorStatus, now = Da
   return (now - recordedAt) / 60000 > appConfig.staleMinutes;
 }
 
-export function getCurrentRateOfRise(readings, stationId) {
-  if (!Array.isArray(readings) || !stationId) {
-    return { value: 'Not enough data', direction: 'unknown', rateMPerMinute: null };
-  }
-
-  const validReadings = [...readings]
-    .filter((reading) => {
-      if (!reading || reading.station_id !== stationId) return false;
-      if (reading.water_level === null || reading.water_level === undefined || reading.water_level === '') return false;
-
-      const waterLevel = Number(reading.water_level);
-      const timestamp = new Date(reading.recorded_at).getTime();
-      return Number.isFinite(waterLevel) && Number.isFinite(timestamp);
-    })
-    .sort((a, b) => {
-      const timeDifference = new Date(a.recorded_at) - new Date(b.recorded_at);
-      if (timeDifference !== 0) return timeDifference;
-
-      const aId = String(a.id ?? '');
-      const bId = String(b.id ?? '');
-      return aId < bId ? -1 : aId > bId ? 1 : 0;
-    });
-
-  if (validReadings.length < 2) {
-    return { value: 'Not enough data', direction: 'unknown', rateMPerMinute: null };
-  }
-
-  const current = validReadings[validReadings.length - 1];
-  const currentTime = new Date(current.recorded_at).getTime();
-  let previous = null;
-
-  for (let index = validReadings.length - 2; index >= 0; index -= 1) {
-    const candidate = validReadings[index];
-    if (new Date(candidate.recorded_at).getTime() < currentTime) {
-      previous = candidate;
-      break;
-    }
-  }
-
-  if (!previous) {
-    return { value: 'Not enough data', direction: 'unknown', rateMPerMinute: null };
-  }
-
-  const previousTime = new Date(previous.recorded_at).getTime();
-  const elapsedMinutes = (currentTime - previousTime) / 60000;
-
-  if (!Number.isFinite(currentTime) || !Number.isFinite(previousTime) || elapsedMinutes <= 0) {
-    return { value: 'Not enough data', direction: 'unknown', rateMPerMinute: null };
-  }
-
-  const delta = Number(current.water_level) - Number(previous.water_level);
-  const rate = delta / elapsedMinutes;
-
-  if (!Number.isFinite(rate)) {
-    return { value: 'Not enough data', direction: 'unknown', rateMPerMinute: null };
-  }
-
-  const direction = rate > 0 ? 'rising' : rate < 0 ? 'falling' : 'stable';
-  const prefix = rate >= 0 ? '+' : '-';
-
-  return {
-    value: `${prefix}${Math.abs(rate).toFixed(3)} m/min`,
-    direction,
-    rateMPerMinute: rate,
-  };
-}
-
-export function getEstimatedTimeToThreshold(waterLevel, rateMPerMinute) {
-  if (waterLevel === null || waterLevel === undefined || waterLevel === '') {
-    return 'Estimate unavailable';
-  }
-
-  const level = Number(waterLevel);
-  if (!Number.isFinite(level) || !Number.isFinite(rateMPerMinute) || rateMPerMinute <= 0) {
-    return 'Estimate unavailable';
-  }
-
-  const nextThreshold = Object.entries(appConfig.statusThresholds)
-    .filter(([status, threshold]) => status !== 'NORMAL' && Number.isFinite(threshold.min) && threshold.min > level)
-    .sort(([, a], [, b]) => a.min - b.min)[0];
-
-  if (!nextThreshold) return 'Estimate unavailable';
-
-  const [status, threshold] = nextThreshold;
-  const totalMinutes = Math.ceil((threshold.min - level) / rateMPerMinute);
-  if (!Number.isFinite(totalMinutes)) return 'Estimate unavailable';
-
-  const days = Math.floor(totalMinutes / 1440);
-  const hours = Math.floor((totalMinutes % 1440) / 60);
-  const minutes = totalMinutes % 60;
-  const duration = [
-    days ? `${days}d` : null,
-    hours ? `${hours}h` : null,
-    minutes ? `${minutes}m` : null,
-  ].filter(Boolean).join(' ') || '1m';
-
-  return `Estimated time to ${status}: ${duration}`;
-}
+export { getCurrentRateOfRise, getEstimatedTimeToThreshold };
 
 const timeWindowOptions = [
   { label: '1 Hour', value: '1h' },
@@ -151,27 +56,29 @@ const timeWindowOptions = [
 ];
 
 export default function HomePage() {
-  const { latestReading, readings, sensors, alerts, loading, error } = useData();
+  const { latestReading, readings, sensors, alerts, loading, error, demoMode, now } = useData();
   const [selectedWindow, setSelectedWindow] = useState('24h');
 
-  const sensorStatus = latestReading ? getSensorStatus(latestReading) : 'UNKNOWN';
-  const riskStatus = latestReading && latestReading.water_level !== null && latestReading.water_level !== undefined
+  const matchedSensor = latestReading && latestReading.station_id
+    ? sensors.find((sensor) => sensor.station_id === latestReading.station_id)
+    : null;
+  const readingWithSensorStatus = latestReading && matchedSensor?.status
+    ? { ...latestReading, sensor_status: matchedSensor.status }
+    : latestReading;
+  const sensorStatus = latestReading ? getSensorStatus(readingWithSensorStatus, appConfig.staleMinutes, now) : 'UNKNOWN';
+  const readingIsStale = isRiverReadingStaleOrUnavailable(latestReading, sensorStatus, now);
+  const riskStatus = !readingIsStale && latestReading && latestReading.water_level !== null && latestReading.water_level !== undefined
     ? getRiskLevel(latestReading.water_level)
     : 'UNAVAILABLE';
   const latestLevelNumber = Number(latestReading?.water_level);
-  const readingIsStale = isRiverReadingStaleOrUnavailable(latestReading, sensorStatus);
   const rateOfRise = useMemo(
-    () => getCurrentRateOfRise(readings, latestReading?.station_id || null),
-    [readings, latestReading?.station_id],
+    () => getCurrentRateOfRise(readings, latestReading?.station_id || null, readingIsStale),
+    [readings, latestReading?.station_id, readingIsStale],
   );
   const estimatedTimeToThreshold = getEstimatedTimeToThreshold(
     latestReading?.water_level,
     rateOfRise.rateMPerMinute,
   );
-
-  const matchedSensor = latestReading && latestReading.station_id
-    ? sensors.find((sensor) => sensor.station_id === latestReading.station_id)
-    : null;
 
   const monitoringStation = matchedSensor || {
     station_id: latestReading?.station_id || 'N/A',
@@ -194,9 +101,34 @@ export default function HomePage() {
       { label: 'Monitoring Stations', value: String(uniqueStations.length || 0) },
       { label: 'Active Sensors', value: String(activeSensors || 0) },
       { label: 'Readings Today', value: String(readingsToday || 0) },
-      { label: 'Active Alerts', value: String(alerts.length || 0) },
+      { label: 'Active Alerts', value: String(alerts.filter((alert) => alert.is_active !== false && String(alert.status || '').toUpperCase() !== 'RESOLVED').length) },
     ];
   }, [sensors, readings, alerts]);
+
+  const stationStatusCards = useMemo(() => {
+    const latestByStation = new Map();
+    readings.forEach((reading) => {
+      const previous = latestByStation.get(reading.station_id);
+      if (!previous || new Date(reading.recorded_at) > new Date(previous.recorded_at)) {
+        latestByStation.set(reading.station_id, reading);
+      }
+    });
+    const monitoredStations = sensors.length
+      ? sensors
+      : latestReading ? [{ station_id: latestReading.station_id, status: latestReading.sensor_status }] : [];
+    const counts = { WATCH: 0, WARNING: 0, CRITICAL: 0, STALE: 0, OFFLINE: 0, UNKNOWN: 0 };
+
+    monitoredStations.forEach((sensor) => {
+      const reading = latestByStation.get(sensor.station_id)
+        || (latestReading?.station_id === sensor.station_id ? latestReading : null);
+      let status = getSensorStatus(reading, appConfig.staleMinutes, now);
+      if (String(sensor.status || '').toUpperCase() === 'OFFLINE') status = 'OFFLINE';
+      const category = status === 'ONLINE' ? getRiskLevel(reading?.water_level) : status;
+      if (Object.hasOwn(counts, category)) counts[category] += 1;
+    });
+
+    return Object.entries(counts).map(([label, value]) => ({ label, value: String(value) }));
+  }, [latestReading, now, readings, sensors]);
 
   const filteredReadings = useMemo(() => {
     if (!readings.length) return [];
@@ -215,7 +147,12 @@ export default function HomePage() {
     });
   }, [readings, selectedWindow]);
 
-  const chartData = filteredReadings.map((reading) => ({
+  const chartData = filteredReadings.filter((reading) => (
+    reading.water_level !== null
+    && reading.water_level !== undefined
+    && reading.water_level !== ''
+    && Number.isFinite(Number(reading.water_level))
+  )).map((reading) => ({
     label: new Date(reading.recorded_at).toLocaleString([], {
       month: 'short',
       day: 'numeric',
@@ -230,6 +167,7 @@ export default function HomePage() {
       return 0;
     }
 
+    if (readingIsStale) return 0;
     const value = Number(latestReading.water_level);
     if (!Number.isFinite(value)) return 0;
     const maxThreshold = 4;
@@ -239,6 +177,7 @@ export default function HomePage() {
   return (
     <div className="dashboard-shell">
       <section className="hero-card dashboard-hero">
+        {demoMode ? <div className="demo-banner">DEMO MODE · Example readings only · Not live sensor data</div> : null}
         <div className="dashboard-hero__header">
           <div>
             <p className="eyebrow">Monitoring overview</p>
@@ -250,8 +189,9 @@ export default function HomePage() {
         <div className="dashboard-hero__content">
           <div>
             <div className="water-level-value">
-              {latestReading ? formatWaterLevel(latestReading.water_level) : 'Sensor data unavailable'}
+              {readingIsStale ? 'Not current' : latestReading ? formatWaterLevel(latestReading.water_level) : 'Sensor data unavailable'}
             </div>
+            {readingIsStale && latestReading ? <div className="muted">Last stored level: {formatWaterLevel(latestReading.water_level)}</div> : null}
             <div className="water-level-meta">
               <span>{latestReading?.station_id || 'Monitoring station unavailable'}</span>
               <span>•</span>
@@ -264,7 +204,13 @@ export default function HomePage() {
             <div className={`risk-status risk-status--${riskStatus.toLowerCase()}`}>
               {riskStatus === 'UNAVAILABLE' ? 'Status unavailable' : formatStatusLabel(riskStatus)}
             </div>
-            <div className="mini-detail">Thresholds configured via app settings</div>
+            <div className="mini-detail">
+              {riskStatus === 'NORMAL' ? 'River level is within the normal range. Stay aware of official updates.' : null}
+              {riskStatus === 'WATCH' ? 'Monitor river updates and be ready to act if conditions change.' : null}
+              {riskStatus === 'WARNING' ? 'Prepare essential items and follow responder instructions.' : null}
+              {riskStatus === 'CRITICAL' ? 'Follow official emergency instructions and move to safety.' : null}
+              {riskStatus === 'UNAVAILABLE' ? 'No current sensor reading is available. Do not rely on an older measurement.' : null}
+            </div>
             <div className={`rate-of-rise rate-of-rise--${rateOfRise.direction}`}>
               {rateOfRise.value}
             </div>
@@ -277,7 +223,7 @@ export default function HomePage() {
           <div className="gauge-readout">
             <div className="gauge-header">
               <span>Water level gauge</span>
-              <strong>{latestReading ? formatWaterLevel(latestReading.water_level) : 'Sensor data unavailable'}</strong>
+              <strong>{readingIsStale ? 'Not current' : latestReading ? formatWaterLevel(latestReading.water_level) : 'Sensor data unavailable'}</strong>
             </div>
             <div className="gauge-track">
               <div className={`gauge-fill gauge-fill--${riskStatus.toLowerCase()}`} style={{ width: `${gaugePercentage}%` }} />
@@ -290,7 +236,7 @@ export default function HomePage() {
             </div>
           </div>
           <RiverWaterTank
-            level={latestLevelNumber}
+            level={readingIsStale ? null : latestLevelNumber}
             severity={riskStatus}
             isStale={readingIsStale}
           />
@@ -305,6 +251,27 @@ export default function HomePage() {
           </div>
         ))}
       </div>
+
+      <div className="dashboard-grid dashboard-grid--summary" aria-label="Station risk status counts">
+        {stationStatusCards.map((card) => (
+          <div key={card.label} className={`metric-card metric-card--${card.label.toLowerCase()}`}>
+            <label>{card.label} stations</label>
+            <strong>{card.value}</strong>
+          </div>
+        ))}
+      </div>
+
+      <section className="panel quick-safety-panel">
+        <div>
+          <p className="eyebrow">Your response</p>
+          <h2>Are you safe?</h2>
+          <p className="muted">Send a SAFE update or request help. An SOS does not automatically contact emergency services.</p>
+        </div>
+        <div className="filter-group">
+          <Link className="safety-action-button safety-action-button--safe" to="/my-safety-status">I am safe</Link>
+          <Link className="safety-action-button safety-action-button--sos" to="/my-safety-status">I need help</Link>
+        </div>
+      </section>
 
       {error ? <div className="error-box">{error}</div> : null}
       {loading ? <div className="empty-state">Loading sensor data...</div> : null}
@@ -344,11 +311,11 @@ export default function HomePage() {
           </div>
           <div className="list-item">
             <span>Connection</span>
-            <StatusBadge status={monitoringStation.status || sensorStatus} />
+            <StatusBadge status={sensorStatus} />
           </div>
           <div className="list-item">
-            <span>Latest reading</span>
-            <strong>{latestReading ? formatWaterLevel(latestReading.water_level) : 'Sensor data unavailable'}</strong>
+            <span>{readingIsStale ? 'Last stored reading' : 'Latest reading'}</span>
+            <strong>{readingIsStale ? 'Not current' : latestReading ? formatWaterLevel(latestReading.water_level) : 'Sensor data unavailable'}</strong>
           </div>
           <div className="list-item">
             <span>Last communication</span>
@@ -405,11 +372,11 @@ export default function HomePage() {
             </div>
             <div className="list-item">
               <span>Sensor status</span>
-              <StatusBadge status={monitoringStation.status || sensorStatus} />
+              <StatusBadge status={sensorStatus} />
             </div>
             <div className="list-item">
-              <span>Current water level</span>
-              <strong>{latestReading ? formatWaterLevel(latestReading.water_level) : 'Sensor data unavailable'}</strong>
+              <span>{readingIsStale ? 'Last stored water level' : 'Current water level'}</span>
+              <strong>{readingIsStale ? 'Not current' : latestReading ? formatWaterLevel(latestReading.water_level) : 'Sensor data unavailable'}</strong>
             </div>
           </div>
         </section>

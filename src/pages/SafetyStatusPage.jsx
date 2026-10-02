@@ -50,6 +50,8 @@ export default function SafetyStatusPage() {
   const [submittedSosRequest, setSubmittedSosRequest] = useState(null);
   const [error, setError] = useState(null);
   const [confirmation, setConfirmation] = useState(null);
+  const [confirmationDetails, setConfirmationDetails] = useState(null);
+  const [locationDescription, setLocationDescription] = useState('');
 
   const activeSosRequest = useMemo(
     () => {
@@ -115,6 +117,7 @@ export default function SafetyStatusPage() {
     setAction('safe');
     setError(null);
     setConfirmation(null);
+    setConfirmationDetails(null);
 
     try {
       if (activeSosRequest) {
@@ -127,13 +130,23 @@ export default function SafetyStatusPage() {
         setSubmittedSosRequest(null);
       }
 
-      const result = await saveResidentSafetyStatus({ status: 'SAFE', latitude: null, longitude: null, notes: null });
+      const result = await saveResidentSafetyStatus({
+        status: 'SAFE',
+        latitude: null,
+        longitude: null,
+        notes: locationDescription.trim() || null,
+      });
 
       if (result.error || !result.data) {
         setError(result.error?.message || 'SAFE status could not be saved.');
       } else {
         setSafetyStatus(result.data);
         setConfirmation('Your safety status has been updated to SAFE.');
+        setConfirmationDetails({
+          status: 'SAFE',
+          time: result.data.updated_at || result.data.created_at || new Date().toISOString(),
+          location: locationDescription.trim() || 'Not provided',
+        });
         await refresh();
       }
     } catch (actionError) {
@@ -157,25 +170,28 @@ export default function SafetyStatusPage() {
     setAction('sos');
     setError(null);
     setConfirmation(null);
+    setConfirmationDetails(null);
 
     try {
       const shareLocation = window.confirm('Would you like to share your current location with responders for this SOS?');
-      if (!shareLocation) {
-        setError('Location sharing is required to show your location to nearby responders.');
-        return;
-      }
-
-      const locationResult = await getLocationOnce();
-      if (!locationResult.location) {
-        setError(locationResult.message || 'Location sharing is required to show your location to nearby responders.');
+      let sharedLocation = null;
+      if (shareLocation) {
+        const locationResult = await getLocationOnce();
+        sharedLocation = locationResult.location;
+        if (!sharedLocation && !locationDescription.trim()) {
+          setError(`${locationResult.message || 'Current location is unavailable.'} Enter a place name to send the SOS without coordinates.`);
+          return;
+        }
+      } else if (!locationDescription.trim()) {
+        setError('Enter a place name or allow current location sharing before submitting an SOS.');
         return;
       }
 
       const result = await submitSosRequest({
-        latitude: locationResult.location?.latitude,
-        longitude: locationResult.location?.longitude,
-        note: null,
-        locationShared: true,
+        latitude: sharedLocation?.latitude,
+        longitude: sharedLocation?.longitude,
+        note: locationDescription.trim() || null,
+        locationShared: Boolean(sharedLocation),
       });
 
       if (import.meta.env.DEV) {
@@ -196,9 +212,12 @@ export default function SafetyStatusPage() {
         setSubmittedSosRequest(result.data);
         setConfirmation(result.existing
           ? `SOS ACTIVE. Your help request is currently active${result.data.status ? ` (${result.data.status}).` : '.'}`
-          : locationResult.location
-          ? 'SOS SENT. Help request submitted. Responders have been notified with your shared location.'
-          : 'SOS SENT. Help request submitted without location information. Responders have been notified.');
+          : 'SOS request submitted. Authorized responders can review it. Emergency services have not been contacted automatically.');
+        setConfirmationDetails({
+          status: 'SOS',
+          time: result.data.created_at || new Date().toISOString(),
+          location: locationDescription.trim() || 'Current device location shared with authorized responders',
+        });
         await refresh();
       }
     } catch (actionError) {
@@ -258,6 +277,24 @@ export default function SafetyStatusPage() {
 
         {error ? <div className="error-box">{error}</div> : null}
         {confirmation ? <div className="success-box">{confirmation}</div> : null}
+        {confirmationDetails ? (
+          <div className="safety-confirmation-details" role="status">
+            <strong>Status: {confirmationDetails.status}</strong>
+            <span>Time: {new Date(confirmationDetails.time).toLocaleString()}</span>
+            <span>Location: {confirmationDetails.location}</span>
+            {confirmationDetails.status === 'SOS' ? <span>Sending an SOS does not automatically contact emergency services.</span> : null}
+          </div>
+        ) : null}
+
+        <label className="field-label" htmlFor="safety-location">Place name or landmark (optional)</label>
+        <input
+          id="safety-location"
+          className="form-control"
+          value={locationDescription}
+          onChange={(event) => setLocationDescription(event.target.value)}
+          placeholder="Enter your barangay, purok, or nearby landmark"
+          maxLength={200}
+        />
 
         <div className="safety-status-actions">
           <button
@@ -282,6 +319,7 @@ export default function SafetyStatusPage() {
           <span>Latest saved status</span>
           <strong>{loadingStatus ? 'Loading...' : safetyStatus?.status || 'No status recorded'}</strong>
           <span>{formatStatusTime(safetyStatus?.updated_at || safetyStatus?.created_at)}</span>
+          {safetyStatus?.notes ? <span>Location: {safetyStatus.notes}</span> : null}
         </div>
 
         {activeSosRequest ? (
@@ -289,6 +327,7 @@ export default function SafetyStatusPage() {
             <strong>Your emergency request is active.</strong>
             <span>Status: {activeSosRequest.status}</span>
             <span>Reported {formatStatusTime(activeSosRequest.created_at)}</span>
+            <span>Location: {activeSosRequest.notes || activeSosRequest.location || 'Not provided'}</span>
             <button
               className="filter-button"
               type="button"

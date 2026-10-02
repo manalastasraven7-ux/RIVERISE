@@ -945,6 +945,272 @@ button, input, select, textarea {
   color: var(--muted);
 }
 
+.demo-banner {
+  border: 1px solid rgba(246, 179, 62, 0.42);
+  border-radius: 10px;
+  background: rgba(246, 179, 62, 0.12);
+  color: #ffe3a3;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 0.7rem 0.85rem;
+}
+
+.inline-live-pill--idle {
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--muted);
+  border-color: var(--border);
+}
+
+.quick-safety-panel,
+.prediction-panel,
+.alert-history-item,
+.response-card,
+.sensor-station-card {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.quick-safety-panel {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.quick-safety-panel h2,
+.prediction-panel h2 {
+  margin: 0;
+}
+
+.quick-safety-panel p {
+  margin: 0.4rem 0 0;
+}
+
+.quick-safety-panel .safety-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.8rem;
+  text-align: center;
+}
+
+.prediction-summary,
+.prediction-estimates,
+.sensor-station-card__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.prediction-summary > div,
+.prediction-estimate,
+.sensor-station-card__grid > div {
+  display: grid;
+  align-content: start;
+  gap: 0.45rem;
+  min-width: 0;
+  padding: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(8, 19, 26, 0.46);
+}
+
+.prediction-summary span,
+.prediction-estimate span,
+.sensor-station-card__grid span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.prediction-summary strong,
+.prediction-estimate strong,
+.sensor-station-card__grid strong {
+  overflow-wrap: anywhere;
+}
+
+.prediction-estimates {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.prediction-crossing {
+  color: #ffd1d1 !important;
+  font-weight: 700;
+}
+
+.alert-history-list,
+.response-list,
+.sensor-station-list,
+.contact-groups {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.alert-history-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(8, 19, 26, 0.48);
+  padding: 0.9rem;
+}
+
+.alert-history-item h3,
+.alert-history-item h4,
+.response-card h3,
+.sensor-station-card h3 {
+  margin: 0;
+}
+
+.alert-history-item p {
+  margin: 0.35rem 0;
+}
+
+.alert-history-item__header,
+.response-card__heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.alert-history-item__details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.2rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.management-form {
+  display: grid;
+  gap: 0.85rem;
+  max-width: 850px;
+}
+
+.management-form h3 {
+  margin: 0;
+}
+
+.management-form label,
+.field-label {
+  display: grid;
+  gap: 0.4rem;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.form-control,
+.management-form input,
+.management-form select,
+.management-form textarea,
+.filter-group select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(6, 26, 36, 0.75);
+  color: var(--text);
+  padding: 0.68rem 0.75rem;
+}
+
+.management-form textarea {
+  resize: vertical;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.checkbox-label {
+  display: flex !important;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+
+.checkbox-label input {
+  width: auto;
+}
+
+.safety-confirmation-details {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(54, 211, 153, 0.28);
+  border-radius: 8px;
+  background: rgba(54, 211, 153, 0.06);
+}
+
+.coordinate-detail {
+  margin: 0.45rem 0 0.8rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.contact-groups {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.contact-item,
+.response-item {
+  align-items: flex-start;
+}
+
+.contact-item > div:first-child,
+.response-item > div:first-child {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.contact-item__phone,
+.response-item__actions {
+  display: grid;
+  justify-items: end;
+  gap: 0.4rem;
+  text-align: right;
+}
+
+.response-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.response-card--pending {
+  border-color: rgba(255, 107, 107, 0.5);
+  box-shadow: 0 0 0 1px rgba(255, 107, 107, 0.12);
+}
+
+.sensor-station-card__grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.sensor-station-card__grid > div {
+  grid-template-columns: minmax(90px, 0.7fr) minmax(0, 1.3fr);
+  align-items: center;
+}
+
+.evacuation-nearby-list {
+  margin-top: 1rem;
+}
+
+.tag.active,
+.tag.pending {
+  background: rgba(251, 191, 36, 0.12);
+  color: #fcd34d;
+}
+
+.tag.acknowledged,
+.tag.responding,
+.tag.in-progress {
+  background: rgba(60, 183, 255, 0.12);
+  color: #a8def8;
+}
+
+.tag.resolved,
+.tag.open,
+.tag.available {
+  background: rgba(54, 211, 153, 0.12);
+  color: #a7f3d0;
+}
+
 @media (max-width: 1100px) {
   .workspace-layout {
     grid-template-columns: 1fr;
@@ -960,6 +1226,14 @@ button, input, select, textarea {
   .dashboard-grid--summary,
   .dashboard-grid--bottom,
   .dashboard-grid--main {
+    grid-template-columns: 1fr;
+  }
+
+  .contact-groups {
+    grid-template-columns: 1fr;
+  }
+
+  .response-list {
     grid-template-columns: 1fr;
   }
 }
@@ -1039,6 +1313,31 @@ button, input, select, textarea {
 
   .community-sos-panel .section-header {
     align-items: flex-start;
+  }
+
+  .quick-safety-panel,
+  .prediction-summary,
+  .prediction-estimates,
+  .form-row,
+  .sensor-station-card__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .alert-history-item__header,
+  .response-card__heading,
+  .contact-item,
+  .response-item {
+    flex-direction: column;
+  }
+
+  .contact-item__phone,
+  .response-item__actions {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .sensor-station-card__grid > div {
+    grid-template-columns: 1fr;
   }
 }
 

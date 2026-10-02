@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from 'react-leaflet';
 import { useData } from '../services/DataContext';
 import { useCommunitySos } from '../services/CommunitySosContext';
@@ -15,8 +15,26 @@ function MapView({ userLocation }) {
   return null;
 }
 
+function hasCoordinates(location) {
+  return location?.latitude !== null
+    && location?.latitude !== undefined
+    && location?.longitude !== null
+    && location?.longitude !== undefined
+    && Number.isFinite(Number(location.latitude))
+    && Number.isFinite(Number(location.longitude));
+}
+
+function distanceKm(first, second) {
+  const radians = (degrees) => degrees * Math.PI / 180;
+  const latitudeDelta = radians(second.latitude - first.latitude);
+  const longitudeDelta = radians(second.longitude - first.longitude);
+  const term = Math.sin(latitudeDelta / 2) ** 2
+    + Math.cos(radians(first.latitude)) * Math.cos(radians(second.latitude)) * Math.sin(longitudeDelta / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(term), Math.sqrt(1 - term));
+}
+
 export default function CommunitySafetyMapPage() {
-  const { loading, error } = useData();
+  const { evacuationCenters = [], loading, error } = useData();
   const {
     viewerLocation,
     locationPermissionState,
@@ -24,12 +42,18 @@ export default function CommunitySafetyMapPage() {
     nearbySos,
     rpcError,
     requestViewerLocation,
+    isResponder,
   } = useCommunitySos();
+  const [placeName, setPlaceName] = useState('');
+  const nearbyCenters = evacuationCenters
+    .filter((center) => hasCoordinates(center))
+    .map((center) => ({ ...center, distance: viewerLocation ? distanceKm(viewerLocation, center) : null }))
+    .sort((first, second) => (first.distance ?? Infinity) - (second.distance ?? Infinity));
   const locationStatus = locationError
     || (locationPermissionState === 'Requesting'
       ? 'Requesting your current location...'
       : viewerLocation
-        ? `Current location: ${viewerLocation.latitude.toFixed(4)}, ${viewerLocation.longitude.toFixed(4)}`
+        ? placeName.trim() || 'Place name unavailable. Add a barangay or landmark for a readable label.'
         : 'Location permission is required to receive nearby SOS alerts.');
 
   return (
@@ -52,6 +76,8 @@ export default function CommunitySafetyMapPage() {
 
       <div className="panel" style={{ marginBottom: '1rem' }}>
         <div className="muted">{locationStatus}</div>
+        {viewerLocation ? <div className="coordinate-detail">Coordinates: {viewerLocation.latitude.toFixed(4)}, {viewerLocation.longitude.toFixed(4)}</div> : null}
+        {viewerLocation ? <label className="field-label" htmlFor="map-place-name">Place name or landmark<input id="map-place-name" className="form-control" value={placeName} onChange={(event) => setPlaceName(event.target.value)} placeholder="Enter your barangay, purok, or landmark" /></label> : null}
       </div>
 
       <div className="panel panel--wide" style={{ padding: 0, overflow: 'hidden' }}>
@@ -73,7 +99,13 @@ export default function CommunitySafetyMapPage() {
             </CircleMarker>
           ) : null}
 
-          {nearbySos.map((request) => (
+          {nearbyCenters.map((center) => (
+            <CircleMarker key={center.id} center={[Number(center.latitude), Number(center.longitude)]} radius={8} pathOptions={{ color: '#16845b', fillColor: '#55c98b', fillOpacity: 0.88 }}>
+              <Popup><strong>{center.name}</strong><div>{[center.address, center.barangay].filter(Boolean).join(', ') || 'Address not configured'}</div><div>Status: {center.status_verified ? center.status : 'Not confirmed'}</div>{center.contact_information ? <div>Contact: {center.contact_information}</div> : null}<a href={`https://www.openstreetmap.org/?mlat=${center.latitude}&mlon=${center.longitude}#map=16/${center.latitude}/${center.longitude}`} target="_blank" rel="noreferrer">Open map</a></Popup>
+            </CircleMarker>
+          ))}
+
+          {isResponder ? nearbySos.map((request) => (
             <CircleMarker
               key={request.id}
               center={[request.latitude, request.longitude]}
@@ -87,7 +119,7 @@ export default function CommunitySafetyMapPage() {
                 <div>Distance: {Math.round(request.distance_meters)} m</div>
               </Popup>
             </CircleMarker>
-          ))}
+          )) : null}
         </MapContainer>
       </div>
 
@@ -98,6 +130,20 @@ export default function CommunitySafetyMapPage() {
           <span>A RIVERISE user nearby has requested emergency assistance.</span>
         </div>
       ) : null}
+      {viewerLocation && !isResponder ? (
+        <div className="empty-state" style={{ marginTop: '1rem' }}>
+          Exact SOS locations are only available to authorized responders.
+        </div>
+      ) : null}
+      <section className="panel evacuation-nearby-list">
+        <div className="section-header"><h3>Evacuation Centers Near Me</h3></div>
+        {nearbyCenters.length ? <div className="stacked-list">{nearbyCenters.map((center) => (
+          <article className="list-item" key={center.id}>
+            <div><strong>{center.name}</strong><span>{[center.address, center.barangay].filter(Boolean).join(', ') || 'Address not configured'}</span><span>Status: {center.status_verified ? center.status : 'Not confirmed'}</span>{center.contact_information ? <span>{center.contact_information}</span> : null}</div>
+            <div className="response-item__actions">{center.distance !== null ? <span>{center.distance.toFixed(1)} km away</span> : null}<a className="filter-button" href={`https://www.openstreetmap.org/?mlat=${center.latitude}&mlon=${center.longitude}#map=16/${center.latitude}/${center.longitude}`} target="_blank" rel="noreferrer">Directions</a></div>
+          </article>
+        ))}</div> : <div className="empty-state">No evacuation center locations are configured.</div>}
+      </section>
     </section>
   );
 }

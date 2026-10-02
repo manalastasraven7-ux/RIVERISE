@@ -81,17 +81,35 @@ describe('SafetyStatusPage', () => {
       note: null,
       locationShared: true,
     }));
-    expect(await screen.findByText(/SOS SENT\. Help request submitted\. Responders have been notified with your shared location/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Emergency services have not been contacted automatically/i)).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Status: SOS');
+    expect(screen.getByRole('status')).toHaveTextContent('Time:');
   });
 
-  it('does not create a community SOS when location sharing is declined', async () => {
+  it('does not create a community SOS when location sharing is declined without a place name', async () => {
     vi.spyOn(window, 'confirm').mockReturnValueOnce(true).mockReturnValueOnce(false);
     render(<SafetyStatusPage />);
 
     fireEvent.click(screen.getByRole('button', { name: 'SOS / NEED HELP' }));
 
-    await waitFor(() => expect(screen.getByText(/Location sharing is required/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Enter a place name or allow current location sharing/i)).toBeInTheDocument());
     expect(mockSubmitSosRequest).not.toHaveBeenCalled();
+  });
+
+  it('submits a manual place when the resident does not share GPS coordinates', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValueOnce(true).mockReturnValueOnce(false);
+    render(<SafetyStatusPage />);
+    fireEvent.change(screen.getByLabelText(/Place name or landmark/i), { target: { value: 'Purok 1, Barangay San Roque' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'SOS / NEED HELP' }));
+
+    await waitFor(() => expect(mockSubmitSosRequest).toHaveBeenCalledWith({
+      latitude: undefined,
+      longitude: undefined,
+      note: 'Purok 1, Barangay San Roque',
+      locationShared: false,
+    }));
+    expect(screen.getByRole('status')).toHaveTextContent('Location: Purok 1, Barangay San Roque');
   });
 
   it('keeps both actions interactive when an active SOS already exists', async () => {

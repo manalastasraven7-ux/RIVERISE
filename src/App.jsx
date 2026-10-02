@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom';
+import { Link, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
 import HomePage from './pages/HomePage';
 import LiveRiverStatusPage from './pages/LiveRiverStatusPage';
@@ -15,9 +15,34 @@ import ManageAnnouncementsPage from './pages/ManageAnnouncementsPage';
 import ManageEvacuationCentersPage from './pages/ManageEvacuationCentersPage';
 import SensorMonitoringPage from './pages/SensorMonitoringPage';
 import LoginPage from './pages/LoginPage';
-import { AuthProvider } from './auth/AuthContext';
+import { AuthProvider, useAuth } from './auth/AuthContext';
 import { DataProvider } from './services/DataContext';
 import { CommunitySosProvider } from './services/CommunitySosContext';
+
+function ResponderOnly({ children }) {
+  const { user, loading, isResponder } = useAuth();
+
+  if (loading) return <section className="empty-state">Checking account permissions...</section>;
+  if (!user) {
+    return (
+      <section className="panel">
+        <h2>Sign in required</h2>
+        <p className="muted">Sign in with an authorized responder or administrator account to continue.</p>
+        <Link className="filter-button is-active" to="/login">Sign in</Link>
+      </section>
+    );
+  }
+  if (!isResponder) {
+    return (
+      <section className="panel">
+        <h2>Access restricted</h2>
+        <p className="muted">This page is available to authorized responders and administrators.</p>
+      </section>
+    );
+  }
+
+  return children;
+}
 
 function App() {
   return (
@@ -34,12 +59,12 @@ function App() {
             <Route path="/community-safety-map" element={<CommunitySafetyMapPage />} />
             <Route path="/emergency-contacts" element={<EmergencyContactsPage />} />
             <Route path="/about" element={<AboutPage />} />
-            <Route path="/responder" element={<ResponderDashboardPage />} />
-            <Route path="/sos-requests" element={<SosRequestsPage />} />
-            <Route path="/manage-alerts" element={<ManageAlertsPage />} />
-            <Route path="/manage-announcements" element={<ManageAnnouncementsPage />} />
-            <Route path="/manage-evacuation-centers" element={<ManageEvacuationCentersPage />} />
-            <Route path="/sensor-monitoring" element={<SensorMonitoringPage />} />
+            <Route path="/responder" element={<ResponderOnly><ResponderDashboardPage /></ResponderOnly>} />
+            <Route path="/sos-requests" element={<ResponderOnly><SosRequestsPage /></ResponderOnly>} />
+            <Route path="/manage-alerts" element={<ResponderOnly><ManageAlertsPage /></ResponderOnly>} />
+            <Route path="/manage-announcements" element={<ResponderOnly><ManageAnnouncementsPage /></ResponderOnly>} />
+            <Route path="/manage-evacuation-centers" element={<ResponderOnly><ManageEvacuationCentersPage /></ResponderOnly>} />
+            <Route path="/sensor-monitoring" element={<ResponderOnly><SensorMonitoringPage /></ResponderOnly>} />
             <Route path="/login" element={<LoginPage />} />
             </Routes>
           </Layout>

@@ -94,23 +94,28 @@ export async function submitSosRequest({ latitude, longitude, note, locationShar
 
   debugSosLog('SOS submission started', { userId: user.id, locationShared: Boolean(locationShared) });
 
-  const validCoordinates = Number.isFinite(Number(latitude))
+  const validCoordinates = latitude !== null
+    && latitude !== undefined
+    && longitude !== null
+    && longitude !== undefined
+    && Number.isFinite(Number(latitude))
     && Number.isFinite(Number(longitude))
     && Number(latitude) >= -90
     && Number(latitude) <= 90
     && Number(longitude) >= -180
     && Number(longitude) <= 180;
 
-  if (!locationShared || !validCoordinates) {
-    const locationError = new Error('Location sharing is required to submit an SOS with a community location.');
+  const manualLocation = String(note || '').trim();
+  if ((locationShared && !validCoordinates) || (!locationShared && !manualLocation)) {
+    const locationError = new Error('Share your current location or enter a place name before submitting an SOS.');
     if (import.meta.env.DEV) console.error('[Community SOS] submit_own_sos validation error', locationError);
     return { data: null, error: locationError };
   }
 
   const { data, error } = await supabase.rpc('submit_own_sos', {
-    sos_latitude: Number(latitude),
-    sos_longitude: Number(longitude),
-    sos_note: note || null,
+    sos_latitude: locationShared ? Number(latitude) : null,
+    sos_longitude: locationShared ? Number(longitude) : null,
+    sos_note: manualLocation || null,
     sos_expires_at: new Date(Date.now() + appConfig.sosExpiryMinutes * 60 * 1000).toISOString(),
   });
 

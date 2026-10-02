@@ -26,7 +26,7 @@ function getLocationError(code) {
 }
 
 export function CommunitySosProvider({ children }) {
-  const { user } = useAuth();
+  const { user, isResponder } = useAuth();
   const [viewerLocation, setViewerLocation] = useState(null);
   const [locationPermissionState, setLocationPermissionState] = useState('Not requested');
   const [locationError, setLocationError] = useState(null);
@@ -81,9 +81,9 @@ export function CommunitySosProvider({ children }) {
     let isMounted = true;
     let channel = null;
 
-    if (!user || !supabase) {
+    if (!user || !isResponder || !supabase) {
       setNearbySos([]);
-      setSubscriptionStatus(!user ? 'SIGNED_OUT' : 'DISABLED');
+      setSubscriptionStatus(!user ? 'SIGNED_OUT' : isResponder ? 'DISABLED' : 'RESPONDER_ONLY');
       return undefined;
     }
 
@@ -157,13 +157,13 @@ export function CommunitySosProvider({ children }) {
       debugLog('unsubscribing from community-sos');
       if (channel) void supabase.removeChannel(channel);
     };
-  }, [user?.id]);
+  }, [user?.id, isResponder]);
 
   useEffect(() => {
     let isMounted = true;
     let refreshInterval = null;
 
-    if (!user || !viewerLocation || !supabase) {
+    if (!user || !isResponder || !viewerLocation || !supabase) {
       setNearbySos([]);
       return undefined;
     }
@@ -189,7 +189,7 @@ export function CommunitySosProvider({ children }) {
       isMounted = false;
       if (refreshInterval) window.clearInterval(refreshInterval);
     };
-  }, [broadcastVersion, user?.id, viewerLocation]);
+  }, [broadcastVersion, user?.id, isResponder, viewerLocation]);
 
   useEffect(() => {
     if (!user) {

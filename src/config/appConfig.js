@@ -12,18 +12,22 @@ export const appConfig = {
   },
 };
 
-export function getSensorStatus(latestReading, staleMinutes = appConfig.staleMinutes) {
+export function getSensorStatus(latestReading, staleMinutes = appConfig.staleMinutes, now = Date.now()) {
   if (!latestReading || !latestReading.recorded_at) {
     return 'UNKNOWN';
   }
 
-  const ageMinutes = (Date.now() - new Date(latestReading.recorded_at).getTime()) / 60000;
+  const recordedAt = new Date(latestReading.recorded_at).getTime();
+  if (!Number.isFinite(recordedAt)) return 'UNKNOWN';
+
+  const ageMinutes = (now - recordedAt) / 60000;
 
   if (ageMinutes > staleMinutes) {
     return 'STALE';
   }
 
-  return latestReading.sensor_status || 'ONLINE';
+  const reportedStatus = String(latestReading.sensor_status || 'ONLINE').toUpperCase();
+  return ['ONLINE', 'OFFLINE', 'STALE', 'UNKNOWN'].includes(reportedStatus) ? reportedStatus : 'UNKNOWN';
 }
 
 export function getRiskLevel(waterLevel) {
