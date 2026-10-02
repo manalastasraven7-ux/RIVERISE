@@ -1,23 +1,20 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { getAlertStatus } from '../config/alertStatus';
 import { useData } from '../services/DataContext';
 import StatusBadge from '../components/StatusBadge';
 
-function getAlertStatus(alert) {
-  return String(alert.status || (alert.is_active ? 'ACTIVE' : 'RESOLVED')).toUpperCase();
-}
-
 export default function AlertsPage() {
-  const { alerts, loading, error, demoMode } = useData();
+  const { alerts, loading, error, demoMode, now } = useData();
   const { isResponder } = useAuth();
   const [severityFilter, setSeverityFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
 
   const visibleAlerts = useMemo(() => alerts
     .filter((alert) => severityFilter === 'ALL' || alert.severity === severityFilter)
-    .filter((alert) => statusFilter === 'ALL' || getAlertStatus(alert) === statusFilter)
-    .sort((first, second) => new Date(second.created_at) - new Date(first.created_at)), [alerts, severityFilter, statusFilter]);
+    .filter((alert) => statusFilter === 'ALL' || getAlertStatus(alert, now) === statusFilter)
+    .sort((first, second) => new Date(second.created_at) - new Date(first.created_at)), [alerts, severityFilter, statusFilter, now]);
 
   return (
     <section className="dashboard-shell">
@@ -39,7 +36,7 @@ export default function AlertsPage() {
         </label>
         <label>Status
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-            {['ALL', 'ACTIVE', 'ACKNOWLEDGED', 'RESOLVED'].map((status) => <option key={status} value={status}>{status === 'ALL' ? 'All statuses' : status}</option>)}
+            {['ALL', 'ACTIVE', 'ACKNOWLEDGED', 'RESOLVED', 'EXPIRED'].map((status) => <option key={status} value={status}>{status === 'ALL' ? 'All statuses' : status}</option>)}
           </select>
         </label>
       </div>
@@ -54,7 +51,7 @@ export default function AlertsPage() {
                 </div>
                 <div className="filter-group">
                   <StatusBadge status={alert.severity} />
-                  <StatusBadge status={getAlertStatus(alert)} />
+                  <StatusBadge status={getAlertStatus(alert, now)} />
                 </div>
               </div>
               <p>{alert.message}</p>

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { getRiskLevel, getSensorStatus } from '../config/appConfig';
+import { isAlertExpired } from '../config/alertStatus';
 import { getCurrentRateOfRise } from '../config/riverMetrics';
 import useResponderResponses from '../services/useResponderResponses';
 import { useData } from '../services/DataContext';
@@ -24,6 +25,7 @@ export default function ResponderDashboardPage() {
     const priority = (status) => status === 'PENDING' ? 0 : status === 'ACKNOWLEDGED' || status === 'RESPONDING' ? 1 : 2;
     return priority(a.status) - priority(b.status) || new Date(b.created_at) - new Date(a.created_at);
   }).slice(0, 5);
+  const activeAlerts = alerts.filter((alert) => alert.is_active && !isAlertExpired(alert, now));
 
   return (
     <section className="dashboard-shell">
@@ -54,7 +56,7 @@ export default function ResponderDashboardPage() {
           <div>{pendingSos.length}</div>
         </div>
         <div className="summary-card"><h3>Resolved SOS</h3><div>{resolvedSos.length}</div></div>
-        <div className="summary-card"><h3>Active alerts</h3><div>{alerts.filter((alert) => alert.is_active).length}</div></div>
+        <div className="summary-card"><h3>Active alerts</h3><div>{activeAlerts.length}</div></div>
       </div>
 
       <div className="dashboard-grid dashboard-grid--bottom">
@@ -87,7 +89,7 @@ export default function ResponderDashboardPage() {
       </div>
 
       <div className="dashboard-grid dashboard-grid--bottom">
-        <section className="panel"><h3>Active alerts</h3>{alerts.filter((alert) => alert.is_active).map((alert) => <article key={alert.id} className="list-item"><div><strong>{alert.title}</strong><p>{alert.message}</p></div><StatusBadge status={alert.severity} /></article>)}{!alerts.some((alert) => alert.is_active) ? <div className="empty-state">No active alerts.</div> : null}</section>
+        <section className="panel"><h3>Active alerts</h3>{activeAlerts.map((alert) => <article key={alert.id} className="list-item"><div><strong>{alert.title}</strong><p>{alert.message}</p></div><StatusBadge status={alert.severity} /></article>)}{!activeAlerts.length ? <div className="empty-state">No active alerts.</div> : null}</section>
         <section className="panel"><h3>Published announcements</h3>{announcements.map((announcement) => <article key={announcement.id} className="list-item"><div><strong>{announcement.title}</strong><p>{announcement.message}</p></div></article>)}{!announcements.length ? <div className="empty-state">No announcements published.</div> : null}<p className="muted">Evacuation centers configured: {evacuationCenters.length}</p></section>
       </div>
     </section>

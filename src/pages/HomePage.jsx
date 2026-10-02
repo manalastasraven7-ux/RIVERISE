@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useData } from '../services/DataContext';
 import { appConfig, getRiskLevel, getSensorStatus } from '../config/appConfig';
+import { getAlertStatus, isAlertExpired } from '../config/alertStatus';
 import { getCurrentRateOfRise, getEstimatedTimeToThreshold } from '../config/riverMetrics';
 import StatusBadge from '../components/StatusBadge';
 import RiverChart from '../components/RiverChart';
@@ -101,9 +102,9 @@ export default function HomePage() {
       { label: 'Monitoring Stations', value: String(uniqueStations.length || 0) },
       { label: 'Active Sensors', value: String(activeSensors || 0) },
       { label: 'Readings Today', value: String(readingsToday || 0) },
-      { label: 'Active Alerts', value: String(alerts.filter((alert) => alert.is_active !== false && String(alert.status || '').toUpperCase() !== 'RESOLVED').length) },
+      { label: 'Active Alerts', value: String(alerts.filter((alert) => alert.is_active !== false && getAlertStatus(alert, now) !== 'RESOLVED' && !isAlertExpired(alert, now)).length) },
     ];
-  }, [sensors, readings, alerts]);
+  }, [sensors, readings, alerts, now]);
 
   const stationStatusCards = useMemo(() => {
     const latestByStation = new Map();

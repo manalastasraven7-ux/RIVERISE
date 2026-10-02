@@ -1,14 +1,11 @@
 import { useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { getAlertStatus } from '../config/alertStatus';
 import { useData } from '../services/DataContext';
 import { supabase } from '../services/supabaseClient';
 import StatusBadge from '../components/StatusBadge';
 
 const initialForm = { title: '', severity: 'WATCH', location: '', message: '' };
-
-function getAlertStatus(alert) {
-  return String(alert.status || (alert.is_active ? 'ACTIVE' : 'RESOLVED')).toUpperCase();
-}
 
 export default function ManageAlertsPage() {
   const { user } = useAuth();
@@ -113,7 +110,7 @@ export default function ManageAlertsPage() {
                 {isDemo ? <span className="muted">Example only. This record is not stored in Supabase.</span> : (
                   <div className="filter-group">
                     {status === 'ACTIVE' ? <button className="filter-button" type="button" disabled={busyId === alert.id} onClick={() => updateStatus(alert, 'ACKNOWLEDGED')}>Acknowledge</button> : null}
-                    {status !== 'RESOLVED' ? <button className="filter-button" type="button" disabled={busyId === alert.id} onClick={() => updateStatus(alert, 'RESOLVED')}>Resolve</button> : null}
+                    {status === 'ACTIVE' || status === 'ACKNOWLEDGED' ? <button className="filter-button" type="button" disabled={busyId === alert.id} onClick={() => updateStatus(alert, 'RESOLVED')}>Resolve</button> : null}
                     <button className="filter-button" type="button" disabled={busyId === alert.id} onClick={() => deleteAlert(alert)}>Delete</button>
                   </div>
                 )}
